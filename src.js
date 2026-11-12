@@ -15,19 +15,83 @@ const markets = [
   {symbol:'ADA',name:'Cardano',price:0.4512,change:-1.13,color:'#2875ca'},
   {symbol:'DOGE',name:'Dogecoin',price:0.1648,change:3.06,color:'#c2a633'}
 ];
-let selected='BTC', side='buy', user=null, profile=null, wallet=3, holdings=[], trades=[], admin=false;
+let marketSocket=null;
+let candleSocket=null;
+let candles=[];
+let liveConnected=false;
 
 const $ = s => document.querySelector(s);
 const money = n => Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USDT';
 const qty = n => Number(n||0).toLocaleString('en-US',{maximumFractionDigits:8});
 const current = () => markets.find(m=>m.symbol===selected);
 function shell(content){ $('#app').innerHTML=content; }
+function startMarketFeed(){
+  if(marketSocket)marketSocket.close();
+
+  const streams=markets.map(m=>m.symbol.toLowerCase()+'usdt@ticker').join('/');
+  marketSocket=new WebSocket('wss://stream.binance.com:9443/stream?streams='+streams);
+
+  marketSocket.onopen=()=>{
+    liveConnected=true;
+    if($('.live-dot'))$('.live-dot').textContent='LIVE';
+  };
+
+  marketSocket.onmessage=event=>{
+    const message=JSON.parse(event.data);
+    const ticker=message.data;
+    const market=markets.find(m=>m.symbol+'USDT'===ticker.s);
+
+    if(!market)return;
+
+    market.price=Number(ticker.c);
+    market.change=Number(ticker.P);
+
+    document.querySelectorAll('[data-symbol]').forEach(button=>{
+      if(button.dataset.symbol===market.symbol){
+        const price=button.querySelector('.coin-price b');
+        const change=button.querySelector('.coin-price small');
+        if(price)price.textContent=money(market.price);
+        if(change){
+          change.textContent=(market.change>=0?'+':'')+market.change+'%';
+          change.className=market.change>=0?'up':'down';
+        }
+      }
+    });
+
+    if(market.symbol===selected){
+      const quote=$('.asset-quote strong');
+      const change=$('.asset-quote small');
+      if(quote)quote.textContent=money(market.price);
+      if(change){
+        change.textContent=(market.change>=0?'+':'')+market.change+'% today';
+        change.className=market.change>=0?'up':'down';
+      }
+    }
+  };
+
+  marketSocket.onclose=()=>{
+    liveConnected=false;
+    if($('.live-dot'))$('.live-dot').textContent='RECONNECTING';
+    setTimeout(startMarketFeed,5000);
+  };
+
+  marketSocket.onerror=()=>{
+    liveConnected=false;
+    if($('.live-dot'))$('.live-dot').textContent='CONNECTION ERROR';
+  };
+}
 function marketRows(){return markets.map(m=>`<button class="market-row ${m.symbol===selected?'active':''}" data-symbol="${m.symbol}">
   <span class="coin-icon" style="--coin:${m.color}">${m.symbol.slice(0,1)}</span><span class="coin-name"><b>${m.symbol}/USDT</b><small>${m.name}</small></span>
   <span class="coin-price"><b>${money(m.price)}</b><small class="${m.change>=0?'up':'down'}">${m.change>=0?'+':''}${m.change}%</small></span></button>`).join('')}
 function chartSvg(){
-  const pts=Array.from({length:42},(_,i)=>{let v=100+Math.sin(i*.58)*8+Math.cos(i*.23)*5+i*.28;return `${i*18},${150-v}`}).join(' ');
-  return `<svg viewBox="0 0 740 180" preserveAspectRatio="none" class="chart"><defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#19c78a" stop-opacity=".28"/><stop offset="1" stop-color="#19c78a" stop-opacity="0"/></linearGradient></defs><path d="M ${pts} L 738,180 L 0,180 Z" fill="url(#area)"/><polyline points="${pts}" fill="none" stroke="#19c78a" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>`;
+  return `<div class="live-chart-placeholder">
+    <div class="chart-loading">Connecting to live market data...</div>
+    <svg viewBox="0 0 740 180" class="chart">
+      <text x="370" y="90" text-anchor="middle" fill="#8290a6" font-size="13">
+        Waiting for live candles
+      </text>
+    </svg>
+  </div>`;
 }
 function render(){
  const m=current();
@@ -90,6 +154,7 @@ async function loadInvites(){const box=$('#invite-list');box.textContent='Loadin
 async function loadUsers(){const box=$('#admin-users');box.textContent='Loading…';const {data,error}=await supabase.rpc('admin_user_overview');if(error){box.textContent=error.message;return}box.innerHTML=`<div class="table-head"><span>USER</span><span>ROLE</span><span>VIRTUAL USDT</span></div>`+data.map(u=>`<div class="table-row"><span>${escapeHtml(u.display_name||u.email)}</span><span>${escapeHtml(u.role)}</span><b>${money(u.balance)}</b></div>`).join('')}
 async function init(){
  if(!configured){renderSetup();return}
+  startMarketFeed();
  const {data}=await supabase.auth.getSession();user=data.session?.user||null;
  if(user){try{await refreshData()}catch(e){toast(e.message)}}
  render();

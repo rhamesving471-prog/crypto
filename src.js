@@ -64,6 +64,10 @@ function startMarketFeed(){
     if(!priceHistory[market.symbol]) priceHistory[market.symbol]=[];
 priceHistory[market.symbol].push(market.price);
 if(priceHistory[market.symbol].length>60) priceHistory[market.symbol].shift();
+    const chart=$('.live-chart-placeholder');
+if(chart && market.symbol===selected){
+  chart.outerHTML=chartSvg();
+}
     market.change=Number(ticker.P);
 
     document.querySelectorAll('[data-symbol]').forEach(button=>{
@@ -103,7 +107,49 @@ if(priceHistory[market.symbol].length>60) priceHistory[market.symbol].shift();
 function marketRows(){return markets.map(m=>`<button class="market-row ${m.symbol===selected?'active':''}" data-symbol="${m.symbol}">
   <span class="coin-icon" style="--coin:${m.color}">${m.symbol.slice(0,1)}</span><span class="coin-name"><b>${m.symbol}/USDT</b><small>${m.name}</small></span>
   <span class="coin-price"><b>${money(m.price)}</b><small class="${m.change>=0?'up':'down'}">${m.change>=0?'+':''}${m.change}%</small></span></button>`).join('')}
+
 function chartSvg(){
+  const m=current();
+  const prices=priceHistory[m.symbol]||[];
+
+  if(prices.length<2){
+    return `<div class="live-chart-placeholder">
+      <div class="chart-loading">Waiting for live price updates...</div>
+      <svg viewBox="0 0 740 180" class="chart">
+        <text x="370" y="90" text-anchor="middle"
+          fill="#8290a6" font-size="13">
+          Live chart loading
+        </text>
+      </svg>
+    </div>`;
+  }
+
+  const min=Math.min(...prices);
+  const max=Math.max(...prices);
+  const range=max-min||1;
+
+  const points=prices.map((price,i)=>{
+    const x=10+(i/(prices.length-1))*720;
+    const y=160-((price-min)/range)*140;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return `<div class="live-chart-placeholder">
+    <svg viewBox="0 0 740 180" class="chart"
+      preserveAspectRatio="none">
+      <line x1="10" y1="20" x2="730" y2="20"
+        stroke="#263449"/>
+      <line x1="10" y1="90" x2="730" y2="90"
+        stroke="#263449"/>
+      <line x1="10" y1="160" x2="730" y2="160"
+        stroke="#263449"/>
+      <polyline points="${points}" fill="none"
+        stroke="#16c7a1" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>`;
+}
+
   return `<div class="live-chart-placeholder">
     <div class="chart-loading">Connecting to live market data...</div>
     <svg viewBox="0 0 740 180" class="chart">

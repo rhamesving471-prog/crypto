@@ -19,6 +19,7 @@ let marketSocket=null;
 let candleSocket=null;
 let candles=[];
 let liveConnected=false;
+const priceHistory = {};
 let user = null;
 let profile = null;
 let wallet = 3;
@@ -60,6 +61,9 @@ function startMarketFeed(){
     if(!market)return;
 
     market.price=Number(ticker.c);
+    if(!priceHistory[market.symbol]) priceHistory[market.symbol]=[];
+priceHistory[market.symbol].push(market.price);
+if(priceHistory[market.symbol].length>60) priceHistory[market.symbol].shift();
     market.change=Number(ticker.P);
 
     document.querySelectorAll('[data-symbol]').forEach(button=>{

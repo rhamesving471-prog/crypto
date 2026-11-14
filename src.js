@@ -19,6 +19,14 @@ let marketSocket=null;
 let candleSocket=null;
 let candles=[];
 let liveConnected=false;
+let user = null;
+let profile = null;
+let wallet = 1;
+let holdings = [];
+let trades = [];
+let admin = false;
+let selected = 'BTC';
+let side = 'buy';
 
 const $ = s => document.querySelector(s);
 const money = n => Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USDT';
